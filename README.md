@@ -6,6 +6,8 @@ It uses the [Comic Vine API](https://comicvine.gamespot.com/api/) and runs on yo
 
 ## ✨ Features
 
+![screenshot](img/screenshot.png)
+
 - **Three ways to search:** by **character** (Batman), by **comic** (Absolute Batman) or by **artist** (Peach Momoko, John Romita Jr.).
 - **Everything on one page:** each series is a collapsible section. Open it and its covers load right there, with no page changes.
 - **Variant covers:** one button per series loads the alternate covers next to each issue, marked with a tag.
