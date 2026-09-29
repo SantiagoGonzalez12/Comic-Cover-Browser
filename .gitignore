@@ -1,0 +1,10 @@
+# Clave personal de Comic Vine: no subir nunca
+comicvine_key.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Sistema
+.DS_Store
+Thumbs.db
