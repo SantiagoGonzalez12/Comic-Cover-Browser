@@ -1,10 +1,10 @@
-# 🦇 Comic Cover Browser
+# Comic Cover Browser
 
 A local web app to **browse every cover of a character, series or artist on a single page**, including **variant covers**, and download them at the highest resolution available. Built for finding covers to turn into posters.
 
 It uses the [Comic Vine API](https://comicvine.gamespot.com/api/) and runs on your own computer. All you need is Python, with no extra libraries.
 
-## ✨ Features
+## Features
 
 ![screenshot](img/screenshot.png)
 
@@ -15,7 +15,7 @@ It uses the [Comic Vine API](https://comicvine.gamespot.com/api/) and runs on yo
 - **Filter and sort:** filter by title or publisher, and sort by newest, most issues or A-Z.
 - **High-quality downloads:** the **Download** button saves the original image from Comic Vine, not the thumbnail shown on screen.
 
-## 🚀 Getting started
+## Getting started
 
 ### 1. Requirements
 
@@ -44,7 +44,7 @@ Your browser opens at `http://127.0.0.1:8765`. Press `Ctrl+C` in the terminal to
 4. Press **Load variants** inside a series to add its alternate covers.
 5. Press **Download** on any cover you like.
 
-## ⚠️ Limitations
+## Limitations
 
 - **Rate limit.** Comic Vine limits requests per hour (around 200 per resource). Loading variants makes one request per issue, and opening many series at once uses a lot. If you hit the limit, the page tells you and you can press the button again later; it resumes where it left off.
 - **A character's series list is incomplete.** Comic Vine's per-character list of series is sparsely filled in. So character search combines that list with every series whose title contains the name (up to 1000). Series where the character appears but isn't in the title (for example *Detective Comics* for Batman) only show up if Comic Vine has them linked.
@@ -53,7 +53,7 @@ Your browser opens at `http://127.0.0.1:8765`. Press `Ctrl+C` in the terminal to
 - **Quality:** downloads are the largest image Comic Vine has, and its size depends on what each user uploaded. Large posters may need an AI upscaler.
 - **Data:** Comic Vine is crowd-sourced, so recent releases may be missing or late.
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
@@ -62,10 +62,10 @@ Your browser opens at `http://127.0.0.1:8765`. Press `Ctrl+C` in the terminal to
 | Port 8765 is already in use | Change the `PORT` value at the top of `comic_covers.py`. |
 | The browser doesn't open | Open `http://127.0.0.1:8765` manually. |
 
-## 🔒 Privacy
+## Privacy
 
 The program only listens on your own computer (`127.0.0.1`). Your key is stored in `comicvine_key.txt`, which this repository's `.gitignore` excludes so it isn't uploaded to GitHub by mistake. Never share that file.
 
-## 📄 Disclaimer
+## Disclaimer
 
 Unofficial project, not affiliated with Comic Vine, Fandom or any publisher. Covers belong to their publishers and artists; this tool is intended for browsing and personal use. Check the [Comic Vine API terms of use](https://comicvine.gamespot.com/api/) before using it in any other way.
