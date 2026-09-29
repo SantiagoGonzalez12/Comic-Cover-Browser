@@ -63,6 +63,16 @@ class H(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
         if u.path == "/":
             return self.send(PAGE, "text/html; charset=utf-8")
+        if u.path == "/api/characters":
+            return self.send(cv("search/", resources="character", query=q.get("q", ""), limit=30,
+                                field_list="id,name,real_name,publisher,image,count_of_issue_appearances"))
+        if u.path == "/api/charvols":
+            return self.send(cv("character/4005-" + re.sub(r"\D", "", q.get("id", "")) + "/",
+                                field_list="id,volume_credits"))
+        if u.path == "/api/volumes":
+            ids = "|".join(re.sub(r"\D", "", x) for x in q.get("ids", "").split(",") if x)
+            return self.send(cv("volumes/", filter="id:" + ids, limit=100,
+                                field_list="id,name,start_year,count_of_issues,publisher,image"))
         if u.path == "/api/search":
             return self.send(cv("search/", resources="volume", query=q.get("q", ""), limit=40,
                                 field_list="id,name,start_year,count_of_issues,publisher,image"))
@@ -99,72 +109,129 @@ PAGE = r"""<!doctype html><html lang="es"><meta charset="utf-8">
 *{box-sizing:border-box}body{margin:0;background:var(--board);color:var(--ink);font:15px/1.4 system-ui,sans-serif}
 header{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 h1{margin:0;font:800 28px "Arial Narrow","Helvetica Neue",sans-serif;font-stretch:condensed;letter-spacing:.5px}
-form{flex:1;display:flex;gap:8px;min-width:240px}
-input{flex:1;padding:10px 12px;border:0;border-radius:4px;font:inherit}
-button,.btn{background:var(--tape);color:var(--ink);border:0;border-radius:4px;padding:9px 14px;font:600 14px system-ui;cursor:pointer;text-decoration:none}
+form{flex:1;display:flex;gap:8px;min-width:260px}
+input,select{padding:9px 12px;border:0;border-radius:4px;font:inherit}form input{flex:1}
+button,.btn{background:var(--tape);color:var(--ink);border:0;border-radius:4px;padding:9px 14px;font:600 14px system-ui;cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
+.mode{display:flex;border:1px solid #4a5568;border-radius:5px;overflow:hidden}
+.mode button{background:none;color:#fff;border-radius:0}.mode button.on{background:var(--tape);color:var(--ink)}
 main{padding:20px;max-width:1500px;margin:auto}
-.msg{color:var(--mute);padding:40px 0;text-align:center}.err{color:#a4161a}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px}
-.vols{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.msg{color:var(--mute);padding:30px 0;text-align:center}.err{color:#a4161a}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px}
+.chars{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 figure{margin:0;background:var(--paper);padding:8px;border-radius:3px;box-shadow:0 1px 0 rgba(0,0,0,.25);position:relative}
 figure img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:#c3cad0}
 figcaption{display:flex;justify-content:space-between;align-items:center;padding-top:6px;font-size:13px}
 figcaption a{color:var(--ink);font-weight:600}
 .var::before{content:"variante";position:absolute;top:14px;left:0;background:var(--tape);font:700 12px system-ui;padding:2px 8px}
-.vol{display:flex;gap:12px;cursor:pointer;text-align:left}.vol img{width:70px;flex:none}
-.vol b{display:block}.vol span{color:var(--mute);font-size:13px}
-.bar{display:flex;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap}.bar h2{margin:0;font-size:22px}
-.bar .info{color:var(--mute)}
+.char{display:flex;gap:12px;cursor:pointer}.char img{width:60px;flex:none}
+.char b{display:block}.char span,.sec span,.info{color:var(--mute);font-size:13px}
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.tools h2{margin:0;font-size:22px}
+.tools input{width:220px}.sp{flex:1}
+details.sec{background:var(--paper);border-radius:4px;margin-bottom:8px;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+summary{display:flex;gap:12px;align-items:center;padding:8px 12px;cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";transition:transform .15s;font-size:16px}details[open]>summary::before{transform:rotate(90deg)}
+summary img{width:38px;aspect-ratio:2/3;object-fit:cover;background:#c3cad0}summary b{display:block}
+.body{padding:4px 14px 16px;background:var(--board)}
+.bar{display:flex;gap:12px;align-items:center;margin:10px 0}
 </style>
 <header><h1>PORTADAS</h1>
-<form id="f"><input id="q" placeholder="Busca una serie o personaje: Batman, Absolute Batman, Spider-Man…" autofocus><button>Buscar</button></form></header>
-<main id="m"><p class="msg">Escribe el nombre de una serie o personaje para ver sus portadas.</p></main>
+<div class="mode"><button type="button" data-m="char" class="on">Personaje</button><button type="button" data-m="comic">Cómic</button></div>
+<form id="f"><input id="q" placeholder="Personaje: Batman, Spider-Man, Catwoman…" autofocus><button>Buscar</button></form></header>
+<main id="m"><p class="msg">Elige si buscas por personaje o por cómic, escribe un nombre y pulsa Buscar.</p></main>
 <script>
 const $=s=>document.querySelector(s),m=$('#m');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const base=u=>(u||'').split('/').pop();
 async function api(p,q){const r=await fetch('/api/'+p+'?'+new URLSearchParams(q));const d=await r.json();
  if(d.status_code!==1)throw new Error(d.error||'Error '+d.status_code);return d}
-$('#f').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(q)search(q)};
-let last='';
-async function search(q){last=q;m.innerHTML='<p class="msg">Buscando…</p>';
- try{const d=await api('search',{q});
-  const r=d.results.filter(v=>v.count_of_issues>0).sort((a,b)=>b.count_of_issues-a.count_of_issues);
+let active=0;const Q=[];
+function next(){while(active<3&&Q.length){active++;Q.shift()()}}
+const enqueue=fn=>new Promise(res=>{Q.push(()=>fn().finally(()=>{active--;next();res()}));next()});
+
+let mode='char',S=null;
+document.querySelectorAll('.mode button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;
+ document.querySelectorAll('.mode button').forEach(x=>x.classList.toggle('on',x===b));
+ $('#q').placeholder=mode==='char'?'Personaje: Batman, Spider-Man, Catwoman…':'Cómic: Absolute Batman, Detective Comics…'});
+$('#f').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;mode==='char'?searchChars(q):searchComics(q)};
+
+async function searchChars(q){m.innerHTML='<p class="msg">Buscando personajes…</p>';
+ try{const d=await api('characters',{q});const r=d.results;
   if(!r.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
-  window.R=r;
-  m.innerHTML='<div class="grid vols">'+r.map((v,i)=>`<figure class="vol" data-i="${i}">
-   <img loading="lazy" src="${esc(v.image?.small_url)}"><div><b>${esc(v.name)}</b>
-   <span>${esc(v.start_year||'?')} · ${esc(v.publisher?.name||'Sin editorial')}<br>${v.count_of_issues} números</span></div></figure>`).join('')+'</div>';
-  m.querySelectorAll('.vol').forEach(el=>el.onclick=()=>openSeries(window.R[el.dataset.i]));
+  m.innerHTML='<p class="info">Elige el personaje:</p><div class="grid chars">'+r.map((c,i)=>`<figure class="char" data-i="${i}">
+   <img loading="lazy" src="${esc(c.image?.small_url)}"><div><b>${esc(c.name)}</b>
+   <span>${esc(c.real_name||'')}<br>${esc(c.publisher?.name||'')} · ${c.count_of_issue_appearances||0} apariciones</span></div></figure>`).join('')+'</div>';
+  m.querySelectorAll('.char').forEach(el=>el.onclick=()=>openChar(r[el.dataset.i],()=>searchChars(q)));
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
-let items=[],vol=null,busy=false;
-async function openSeries(v){vol=v;items=[];window.scrollTo(0,0);draw('Cargando portadas…');
- try{let off=0,total=1;
-  while(off<total){const d=await api('issues',{volume:v.id,offset:off});total=d.number_of_total_results;
-   d.results.forEach(i=>{if(i.image?.original_url)items.push({id:i.id,num:i.issue_number,img:i.image,vars:[]})});
-   off+=100;draw()}
-  draw();
- }catch(e){draw(e.message,true)}}
-function fig(it,img,isVar,n){const name=`${vol.name}_${it.num}${isVar?'_var'+n:''}`;
+
+async function openChar(c,back){window.scrollTo(0,0);m.innerHTML='<p class="msg">Buscando las series de '+esc(c.name)+'…</p>';
+ try{const d=await api('charvols',{id:c.id});const ids=(d.results.volume_credits||[]).map(v=>v.id);
+  if(!ids.length){m.innerHTML='<p class="msg">Este personaje no tiene series registradas.</p>';return}
+  const vols=[];let done=0;
+  const chunks=[];for(let i=0;i<ids.length;i+=100)chunks.push(ids.slice(i,i+100));
+  await Promise.all(chunks.map(ch=>enqueue(async()=>{const r=await api('volumes',{ids:ch.join(',')});vols.push(...r.results);done+=ch.length;
+   m.innerHTML=`<p class="msg">Cargando series… ${done} de ${ids.length}</p>`})));
+  showVolumes(c.name,vols,back);
+ }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
+
+async function searchComics(q){m.innerHTML='<p class="msg">Buscando…</p>';
+ try{const d=await api('search',{q});if(!d.results.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
+  showVolumes('«'+q+'»',d.results,null)}catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
+
+const st=id=>S.st[id]??=({open:false,items:null,loading:false,err:'',busy:false});
+function showVolumes(title,vols,back){
+ S={title,vols:vols.filter(v=>v.count_of_issues>0),st:{},back,filter:'',sort:'new'};
+ m.innerHTML=`<div class="tools">${back?'<button id="back">← Personajes</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
+  <input id="flt" placeholder="Filtrar por título o editorial"><select id="srt"><option value="new">Más recientes</option><option value="num">Más números</option><option value="az">A-Z</option></select>
+  <button id="all">Abrir todas</button></div><div id="list"></div>`;
+ if(back)$('#back').onclick=back;
+ $('#flt').oninput=e=>{S.filter=e.target.value.toLowerCase();renderList()};
+ $('#srt').onchange=e=>{S.sort=e.target.value;renderList()};
+ $('#all').onclick=toggleAll;renderList()}
+const vis=()=>{const f=S.filter,a=S.vols.filter(v=>!f||(v.name+' '+(v.publisher?.name||'')).toLowerCase().includes(f));
+ const k={new:(x,y)=>(y.start_year||0)-(x.start_year||0),num:(x,y)=>y.count_of_issues-x.count_of_issues,az:(x,y)=>x.name.localeCompare(y.name)}[S.sort];
+ return a.sort(k)};
+function renderList(){const v=vis();$('#cnt').textContent=v.length+' series';
+ $('#list').innerHTML=v.map(x=>`<details class="sec" data-id="${x.id}" ${st(x.id).open?'open':''}><summary>
+  <img loading="lazy" src="${esc(x.image?.icon_url||x.image?.small_url)}"><div><b>${esc(x.name)}</b>
+  <span>${esc(x.start_year||'?')} · ${esc(x.publisher?.name||'Sin editorial')} · ${x.count_of_issues} números</span></div></summary>
+  <div class="body">${st(x.id).open?body(x):''}</div></details>`).join('')||'<p class="msg">Nada coincide con el filtro.</p>'}
+function toggleAll(){const v=vis(),opening=v.some(x=>!st(x.id).open);
+ if(opening&&v.length>30&&!confirm(`Son ${v.length} series y cada una usa al menos una petición. Comic Vine permite unas 200 por hora. ¿Abrir todas igualmente?`))return;
+ v.forEach(x=>st(x.id).open=opening);$('#all').textContent=opening?'Cerrar todas':'Abrir todas';renderList()}
+document.addEventListener('toggle',e=>{const el=e.target;if(!el.matches?.('details.sec'))return;
+ const id=el.dataset.id,s=st(id);s.open=el.open;if(el.open){if(!s.items&&!s.loading)loadIssues(id);else refresh(id)}},true);
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;
+ if(b.dataset.act==='vars')loadVariants(b.dataset.id);
+ if(b.dataset.act==='retry'){const s=st(b.dataset.id);s.items=null;s.err='';loadIssues(b.dataset.id)}});
+
+const vol=id=>S.vols.find(v=>v.id==id);
+function fig(v,it,img,isVar,n){const name=`${v.name}_${v.start_year||''}_${it.num}${isVar?'_var'+n:''}`;
  return `<figure class="${isVar?'var':''}"><img loading="lazy" src="${esc(img.medium_url||img.original_url)}">
  <figcaption><span>#${esc(it.num)}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Descargar</a></figcaption></figure>`}
-function draw(note,isErr){const nv=items.reduce((a,i)=>a+i.vars.length,0);
- m.innerHTML=`<div class="bar"><button id="back">← Resultados</button><h2>${esc(vol.name)} (${esc(vol.start_year||'?')})</h2>
-  <span class="info">${items.length} portadas${nv?' + '+nv+' variantes':''}</span>
-  <button id="vb" ${busy||!items.length?'disabled':''}>${busy?'Buscando variantes…':'Cargar variantes'}</button></div>
-  ${note?`<p class="msg ${isErr?'err':''}">${esc(note)}</p>`:''}
-  <div class="grid">${items.map(it=>fig(it,it.img,false)+it.vars.map((v,k)=>fig(it,v,true,k+1)).join('')).join('')}</div>`;
- $('#back').onclick=()=>last?search(last):location.reload();$('#vb').onclick=loadVariants}
-async function loadVariants(){busy=true;draw();let idx=0,stop=null;
- const todo=items.filter(i=>!i.done);
- const worker=async()=>{while(idx<todo.length&&!stop){const it=todo[idx++];
+function body(v){const s=st(v.id);
+ if(!s.items)return s.err?`<p class="msg err">${esc(s.err)} <button data-act="retry" data-id="${v.id}">Reintentar</button></p>`:'<p class="msg">Cargando portadas…</p>';
+ const nv=s.items.reduce((a,i)=>a+i.vars.length,0);
+ return `<div class="bar"><span class="info">${s.items.length} portadas${nv?' + '+nv+' variantes':''}</span>
+  <button data-act="vars" data-id="${v.id}" ${s.busy?'disabled':''}>${s.busy?'Buscando variantes…':'Cargar variantes'}</button></div>
+  ${s.err?`<p class="msg err">${esc(s.err)}</p>`:''}
+  <div class="grid">${s.items.map(it=>fig(v,it,it.img,false)+it.vars.map((x,k)=>fig(v,it,x,true,k+1)).join('')).join('')}</div>`}
+const pend={};
+function refresh(id){if(pend[id])return;pend[id]=setTimeout(()=>{pend[id]=0;const el=document.querySelector(`details[data-id="${id}"] .body`);
+ if(el&&st(id).open)el.innerHTML=body(vol(id))},250)}
+function loadIssues(id){const s=st(id);s.loading=true;refresh(id);
+ return enqueue(async()=>{try{let off=0,total=1;const items=[];
+  while(off<total){const d=await api('issues',{volume:id,offset:off});total=d.number_of_total_results;
+   d.results.forEach(i=>{if(i.image?.original_url)items.push({id:i.id,num:i.issue_number,img:i.image,vars:[]})});off+=100}
+  s.items=items;s.err=''}catch(e){s.err=e.message}s.loading=false;refresh(id)})}
+async function loadVariants(id){const s=st(id);s.busy=true;s.err='';refresh(id);let stop='';
+ await Promise.all(s.items.filter(i=>!i.done).map(it=>enqueue(async()=>{if(stop)return;
   try{const d=await api('variants',{issue:it.id}),k=base(it.img.original_url);
    it.vars=(d.results.associated_images||[]).filter(x=>x.original_url&&base(x.original_url)!==k)
-    .map(x=>({original_url:x.original_url,medium_url:x.medium_url||x.original_url}));it.done=true;draw()}
-  catch(e){stop=e.message}}};
- await Promise.all([worker(),worker(),worker()]);busy=false;
- draw(stop?stop+' Vuelve a pulsar «Cargar variantes» más tarde para continuar.':'',!!stop)}
+    .map(x=>({original_url:x.original_url,medium_url:x.medium_url||x.original_url}));it.done=true;refresh(id)}
+  catch(e){stop=e.message}})));
+ s.busy=false;s.err=stop?stop+' Vuelve a pulsar «Cargar variantes» más tarde para continuar.':'';refresh(id)}
 </script></html>"""
 
 if __name__ == "__main__":
