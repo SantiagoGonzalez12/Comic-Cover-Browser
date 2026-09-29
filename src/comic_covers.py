@@ -180,7 +180,7 @@ async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p
  try{const d=await api(kind==='char'?'charvols':'personvols',{id:c.id}).catch(e=>({results:{},err:e}));
   const byName=[];
   if(kind==='char'){const key=c.name.toLowerCase();
-   for(let p=1;p<=5;p++){try{const r=await api('volsearch',{q:c.name,page:p});
+   for(let p=1;p<=10;p++){try{const r=await api('volsearch',{q:c.name,page:p});
     byName.push(...r.results.filter(v=>v.name.toLowerCase().includes(key)));if(r.results.length<100)break}catch(e){break}}}
   const have=new Set(byName.map(v=>v.id));
   const ids=(d.results.volume_credits||[]).map(v=>v.id).filter(i=>!have.has(i));
@@ -196,9 +196,15 @@ async function searchComics(q){m.innerHTML='<p class="msg">Buscando…</p>';
  try{const d=await api('search',{q});if(!d.results.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
   showVolumes('«'+q+'»',d.results,null)}catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
+function groupVols(list){const g=new Map();
+ list.filter(v=>v.count_of_issues>0).forEach(v=>{const k=v.name.trim().toLowerCase()+'|'+(v.start_year||''),pn=v.publisher?.name||'',x=g.get(k);
+  if(!x)g.set(k,{...v,ids:[v.id],pubs:new Set([pn]),pubOf:{[v.id]:pn},top:v.count_of_issues});
+  else{x.ids.push(v.id);x.pubs.add(pn);x.pubOf[v.id]=pn;x.count_of_issues+=v.count_of_issues;
+   if(v.count_of_issues>x.top){x.top=v.count_of_issues;x.id=v.id;x.publisher=v.publisher;x.image=v.image}}});
+ return [...g.values()].map(x=>({...x,multi:x.pubs.size>1}))}
 const st=id=>S.st[id]??=({open:false,items:null,loading:false,err:'',busy:false});
 function showVolumes(title,vols,back){
- S={title,vols:vols.filter(v=>v.count_of_issues>0),st:{},back,filter:'',sort:'new'};
+ S={title,vols:groupVols(vols),st:{},back,filter:'',sort:'new'};
  m.innerHTML=`<div class="tools">${back?'<button id="back">← Volver</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
   <input id="flt" placeholder="Filtrar por título o editorial"><select id="srt"><option value="new">Más recientes</option><option value="num">Más números</option><option value="az">A-Z</option></select>
   <button id="all">Abrir todas</button></div><div id="list"></div>`;
@@ -207,7 +213,7 @@ function showVolumes(title,vols,back){
  $('#srt').onchange=e=>{S.sort=e.target.value;renderList()};
  $('#all').onclick=toggleAll;renderList()}
 const vis=()=>{const f=S.filter,a=S.vols.filter(v=>!f||(v.name+' '+(v.publisher?.name||'')).toLowerCase().includes(f));
- const k={new:(x,y)=>(y.start_year||0)-(x.start_year||0),num:(x,y)=>y.count_of_issues-x.count_of_issues,az:(x,y)=>x.name.localeCompare(y.name)}[S.sort];
+ const k={new:(x,y)=>(y.start_year||0)-(x.start_year||0)||y.count_of_issues-x.count_of_issues,num:(x,y)=>y.count_of_issues-x.count_of_issues,az:(x,y)=>x.name.localeCompare(y.name)}[S.sort];
  return a.sort(k)};
 function renderList(){const v=vis();$('#cnt').textContent=v.length+' series';
  $('#list').innerHTML=v.map(x=>`<details class="sec" data-id="${x.id}" ${st(x.id).open?'open':''}><summary>
@@ -226,7 +232,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
 const vol=id=>S.vols.find(v=>v.id==id);
 function fig(v,it,img,isVar,n){const name=`${v.name}_${v.start_year||''}_${it.num}${isVar?'_var'+n:''}`;
  return `<figure class="${isVar?'var':''}"><img loading="lazy" src="${esc(img.medium_url||img.original_url)}">
- <figcaption><span>#${esc(it.num)}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Descargar</a></figcaption></figure>`}
+ <figcaption><span>#${esc(it.num)}${it.pub?' · '+esc(it.pub):''}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Descargar</a></figcaption></figure>`}
 function body(v){const s=st(v.id);
  if(!s.items)return s.err?`<p class="msg err">${esc(s.err)} <button data-act="retry" data-id="${v.id}">Reintentar</button></p>`:'<p class="msg">Cargando portadas…</p>';
  const nv=s.items.reduce((a,i)=>a+i.vars.length,0);
@@ -237,10 +243,12 @@ function body(v){const s=st(v.id);
 const pend={};
 function refresh(id){if(pend[id])return;pend[id]=setTimeout(()=>{pend[id]=0;const el=document.querySelector(`details[data-id="${id}"] .body`);
  if(el&&st(id).open)el.innerHTML=body(vol(id))},250)}
-function loadIssues(id){const s=st(id);s.loading=true;refresh(id);
- return enqueue(async()=>{try{let off=0,total=1;const items=[];
-  while(off<total){const d=await api('issues',{volume:id,offset:off});total=d.number_of_total_results;
-   d.results.forEach(i=>{if(i.image?.original_url)items.push({id:i.id,num:i.issue_number,img:i.image,vars:[]})});off+=100}
+function loadIssues(id){const s=st(id),g=vol(id);s.loading=true;refresh(id);
+ return enqueue(async()=>{try{const items=[];
+  for(const vid of g.ids){let off=0,total=1;
+   while(off<total){const d=await api('issues',{volume:vid,offset:off});total=d.number_of_total_results;
+    d.results.forEach(i=>{if(i.image?.original_url)items.push({id:i.id,num:i.issue_number,date:i.cover_date||'',pub:g.multi?g.pubOf[vid]:'',img:i.image,vars:[]})});off+=100}}
+  if(g.ids.length>1)items.sort((a,b)=>(a.date>b.date)-(a.date<b.date)||parseFloat(a.num)-parseFloat(b.num));
   s.items=items;s.err=''}catch(e){s.err=e.message}s.loading=false;refresh(id)})}
 async function loadVariants(id){const s=st(id);s.busy=true;s.err='';refresh(id);let stop='';
  await Promise.all(s.items.filter(i=>!i.done).map(it=>enqueue(async()=>{if(stop)return;
