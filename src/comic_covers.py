@@ -73,6 +73,12 @@ class H(BaseHTTPRequestHandler):
             ids = "|".join(re.sub(r"\D", "", x) for x in q.get("ids", "").split(",") if x)
             return self.send(cv("volumes/", filter="id:" + ids, limit=100,
                                 field_list="id,name,start_year,count_of_issues,publisher,image"))
+        if u.path == "/api/people":
+            return self.send(cv("search/", resources="person", query=q.get("q", ""), limit=30,
+                                field_list="id,name,image,hometown,deck"))
+        if u.path == "/api/personvols":
+            return self.send(cv("person/4040-" + re.sub(r"\D", "", q.get("id", "")) + "/",
+                                field_list="id,volume_credits"))
         if u.path == "/api/search":
             return self.send(cv("search/", resources="volume", query=q.get("q", ""), limit=40,
                                 field_list="id,name,start_year,count_of_issues,publisher,image"))
@@ -137,7 +143,7 @@ summary img{width:38px;aspect-ratio:2/3;object-fit:cover;background:#c3cad0}summ
 .bar{display:flex;gap:12px;align-items:center;margin:10px 0}
 </style>
 <header><h1>PORTADAS</h1>
-<div class="mode"><button type="button" data-m="char" class="on">Personaje</button><button type="button" data-m="comic">Cómic</button></div>
+<div class="mode"><button type="button" data-m="char" class="on">Personaje</button><button type="button" data-m="comic">Cómic</button><button type="button" data-m="artist">Artista</button></div>
 <form id="f"><input id="q" placeholder="Personaje: Batman, Spider-Man, Catwoman…" autofocus><button>Buscar</button></form></header>
 <main id="m"><p class="msg">Elige si buscas por personaje o por cómic, escribe un nombre y pulsa Buscar.</p></main>
 <script>
@@ -150,24 +156,25 @@ let active=0;const Q=[];
 function next(){while(active<3&&Q.length){active++;Q.shift()()}}
 const enqueue=fn=>new Promise(res=>{Q.push(()=>fn().finally(()=>{active--;next();res()}));next()});
 
+const PH={char:'Personaje: Batman, Spider-Man, Catwoman…',comic:'Cómic: Absolute Batman, Detective Comics…',artist:'Artista: Peach Momoko, John Romita Jr.…'};
 let mode='char',S=null;
 document.querySelectorAll('.mode button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;
  document.querySelectorAll('.mode button').forEach(x=>x.classList.toggle('on',x===b));
- $('#q').placeholder=mode==='char'?'Personaje: Batman, Spider-Man, Catwoman…':'Cómic: Absolute Batman, Detective Comics…'});
-$('#f').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;mode==='char'?searchChars(q):searchComics(q)};
+ $('#q').placeholder=PH[mode]});
+$('#f').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;mode==='comic'?searchComics(q):searchChars(q,mode)};
 
-async function searchChars(q){m.innerHTML='<p class="msg">Buscando personajes…</p>';
- try{const d=await api('characters',{q});const r=d.results;
+async function searchChars(q,kind='char'){m.innerHTML='<p class="msg">Buscando…</p>';
+ try{const d=await api(kind==='char'?'characters':'people',{q});const r=d.results;
   if(!r.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
-  m.innerHTML='<p class="info">Elige el personaje:</p><div class="grid chars">'+r.map((c,i)=>`<figure class="char" data-i="${i}">
+  m.innerHTML='<p class="info">Elige '+(kind==='char'?'el personaje':'el artista')+':</p><div class="grid chars">'+r.map((c,i)=>`<figure class="char" data-i="${i}">
    <img loading="lazy" src="${esc(c.image?.small_url)}"><div><b>${esc(c.name)}</b>
-   <span>${esc(c.real_name||'')}<br>${esc(c.publisher?.name||'')} · ${c.count_of_issue_appearances||0} apariciones</span></div></figure>`).join('')+'</div>';
-  m.querySelectorAll('.char').forEach(el=>el.onclick=()=>openChar(r[el.dataset.i],()=>searchChars(q)));
+   <span>${kind==='char'?esc(c.real_name||'')+'<br>'+esc(c.publisher?.name||'')+' · '+(c.count_of_issue_appearances||0)+' apariciones':esc(c.hometown||'')+'<br>'+esc((c.deck||'').slice(0,90))}</span></div></figure>`).join('')+'</div>';
+  m.querySelectorAll('.char').forEach(el=>el.onclick=()=>openChar(r[el.dataset.i],()=>searchChars(q,kind),kind));
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
-async function openChar(c,back){window.scrollTo(0,0);m.innerHTML='<p class="msg">Buscando las series de '+esc(c.name)+'…</p>';
- try{const d=await api('charvols',{id:c.id});const ids=(d.results.volume_credits||[]).map(v=>v.id);
-  if(!ids.length){m.innerHTML='<p class="msg">Este personaje no tiene series registradas.</p>';return}
+async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p class="msg">Buscando las series de '+esc(c.name)+'…</p>';
+ try{const d=await api(kind==='char'?'charvols':'personvols',{id:c.id});const ids=(d.results.volume_credits||[]).map(v=>v.id);
+  if(!ids.length){m.innerHTML='<p class="msg">No hay series registradas para esta búsqueda.</p>';return}
   const vols=[];let done=0;
   const chunks=[];for(let i=0;i<ids.length;i+=100)chunks.push(ids.slice(i,i+100));
   await Promise.all(chunks.map(ch=>enqueue(async()=>{const r=await api('volumes',{ids:ch.join(',')});vols.push(...r.results);done+=ch.length;
@@ -182,7 +189,7 @@ async function searchComics(q){m.innerHTML='<p class="msg">Buscando…</p>';
 const st=id=>S.st[id]??=({open:false,items:null,loading:false,err:'',busy:false});
 function showVolumes(title,vols,back){
  S={title,vols:vols.filter(v=>v.count_of_issues>0),st:{},back,filter:'',sort:'new'};
- m.innerHTML=`<div class="tools">${back?'<button id="back">← Personajes</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
+ m.innerHTML=`<div class="tools">${back?'<button id="back">← Volver</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
   <input id="flt" placeholder="Filtrar por título o editorial"><select id="srt"><option value="new">Más recientes</option><option value="num">Más números</option><option value="az">A-Z</option></select>
   <button id="all">Abrir todas</button></div><div id="list"></div>`;
  if(back)$('#back').onclick=back;
