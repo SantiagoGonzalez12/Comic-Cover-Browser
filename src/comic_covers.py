@@ -92,7 +92,7 @@ class H(BaseHTTPRequestHandler):
                                 field_list="id,issue_number,cover_date,image"))
         if u.path == "/api/variants":
             return self.send(cv("issue/4000-" + re.sub(r"\D", "", q.get("issue", "")) + "/",
-                                field_list="id,associated_images"))
+                                field_list="id,associated_images,person_credits"))
         if u.path == "/api/img":  # descarga con nombre de archivo
             src = q.get("u", "")
             host = urllib.parse.urlparse(src).hostname or ""
@@ -145,11 +145,16 @@ summary::before{content:"▸";transition:transform .15s;font-size:16px}details[o
 summary img{width:38px;aspect-ratio:2/3;object-fit:cover;background:#c3cad0}summary b{display:block}
 .body{padding:4px 14px 16px;background:var(--board)}
 .bar{display:flex;gap:12px;align-items:center;margin:10px 0}
+#lb{position:fixed;inset:0;z-index:20;background:rgba(16,24,40,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:zoom-out}
+#lb[hidden]{display:none}#lbi{max-height:82vh;max-width:94vw;box-shadow:0 4px 30px rgba(0,0,0,.5)}
+#lbc{display:flex;gap:16px;align-items:center;color:#fff;cursor:default;flex-wrap:wrap;justify-content:center}
+.body figure img{cursor:zoom-in}
 </style>
 <header><h1>COVERS</h1>
 <div class="mode"><button type="button" data-m="char" class="on">Character</button><button type="button" data-m="comic">Comic</button><button type="button" data-m="artist">Artist</button></div>
 <form id="f"><input id="q" placeholder="Character: Batman, Spider-Man, Catwoman…" autofocus><button>Search</button></form></header>
 <main id="m"><p class="msg">Choose whether to search by character, comic or artist, type a name and press Search.</p></main>
+<div id="lb" hidden><img id="lbi" alt=""><div id="lbc"></div></div>
 <script>
 const $=s=>document.querySelector(s),m=$('#m');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -189,7 +194,7 @@ async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p
   const chunks=[];for(let i=0;i<ids.length;i+=100)chunks.push(ids.slice(i,i+100));
   await Promise.all(chunks.map(ch=>enqueue(async()=>{const r=await api('volumes',{ids:ch.join(',')});vols.push(...r.results);done+=ch.length;
    m.innerHTML=`<p class="msg">Loading series… ${done} of ${ids.length}</p>`})));
-  showVolumes(c.name,vols,back);
+  showVolumes(c.name,vols,back);if(kind==='artist'){S.artistId=c.id;S.artistName=c.name}
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
 async function searchComics(q){m.innerHTML='<p class="msg">Searching…</p>';
@@ -227,19 +232,21 @@ document.addEventListener('toggle',e=>{const el=e.target;if(!el.matches?.('detai
  const id=el.dataset.id,s=st(id);s.open=el.open;if(el.open){if(!s.items&&!s.loading)loadIssues(id);else refresh(id)}},true);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;
  if(b.dataset.act==='vars')loadVariants(b.dataset.id);
+ if(b.dataset.act==='only')onlyArtist(b.dataset.id);
  if(b.dataset.act==='retry'){const s=st(b.dataset.id);s.items=null;s.err='';loadIssues(b.dataset.id)}});
 
 const vol=id=>S.vols.find(v=>v.id==id);
 function fig(v,it,img,isVar,n){const name=`${v.name}_${v.start_year||''}_${it.num}${isVar?'_var'+n:''}`;
- return `<figure class="${isVar?'var':''}"><img loading="lazy" src="${esc(img.medium_url||img.original_url)}">
+ return `<figure class="${isVar?'var':''}"><img loading="lazy" src="${esc(img.medium_url||img.original_url)}" data-full="${esc(img.original_url)}">
  <figcaption><span>#${esc(it.num)}${it.pub?' · '+esc(it.pub):''}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Download</a></figcaption></figure>`}
 function body(v){const s=st(v.id);
  if(!s.items)return s.err?`<p class="msg err">${esc(s.err)} <button data-act="retry" data-id="${v.id}">Retry</button></p>`:'<p class="msg">Loading covers…</p>';
- const nv=s.items.reduce((a,i)=>a+i.vars.length,0);
- return `<div class="bar"><span class="info">${s.items.length} covers${nv?' + '+nv+' variants':''}</span>
-  <button data-act="vars" data-id="${v.id}" ${s.busy?'disabled':''}>${s.busy?'Finding variants…':'Load variants'}</button></div>
+ const sh=s.only?s.items.filter(i=>i.cov):s.items,nv=sh.reduce((a,i)=>a+i.vars.length,0);
+ return `<div class="bar"><span class="info">${s.only?sh.length+' of '+s.items.length+' issues have covers by '+esc(S.artistName):sh.length+' covers'}${nv?' + '+nv+' variants':''}</span>
+  <button data-act="vars" data-id="${v.id}" ${s.busy?'disabled':''}>${s.busy?'Finding variants…':'Load variants'}</button>
+  ${S.artistId?`<button data-act="only" data-id="${v.id}" ${s.busy?'disabled':''} title="Checks the credits of every issue (one request each)">${s.only?'Show all covers':'Only '+esc(S.artistName)+'’s covers'}</button>`:''}</div>
   ${s.err?`<p class="msg err">${esc(s.err)}</p>`:''}
-  <div class="grid">${s.items.map(it=>fig(v,it,it.img,false)+it.vars.map((x,k)=>fig(v,it,x,true,k+1)).join('')).join('')}</div>`}
+  <div class="grid">${sh.map(it=>fig(v,it,it.img,false)+it.vars.map((x,k)=>fig(v,it,x,true,k+1)).join('')).join('')}</div>`}
 const pend={};
 function refresh(id){if(pend[id])return;pend[id]=setTimeout(()=>{pend[id]=0;const el=document.querySelector(`details[data-id="${id}"] .body`);
  if(el&&st(id).open)el.innerHTML=body(vol(id))},250)}
@@ -250,13 +257,24 @@ function loadIssues(id){const s=st(id),g=vol(id);s.loading=true;refresh(id);
     d.results.forEach(i=>{if(i.image?.original_url)items.push({id:i.id,num:i.issue_number,date:i.cover_date||'',pub:g.multi?g.pubOf[vid]:'',img:i.image,vars:[]})});off+=100}}
   if(g.ids.length>1)items.sort((a,b)=>(a.date>b.date)-(a.date<b.date)||parseFloat(a.num)-parseFloat(b.num));
   s.items=items;s.err=''}catch(e){s.err=e.message}s.loading=false;refresh(id)})}
+async function onlyArtist(id){const s=st(id);if(s.only){s.only=false;return refresh(id)}
+ if(s.items.some(i=>!i.done))await loadVariants(id);if(s.items.every(i=>i.done))s.only=true;refresh(id)}
 async function loadVariants(id){const s=st(id);s.busy=true;s.err='';refresh(id);let stop='';
  await Promise.all(s.items.filter(i=>!i.done).map(it=>enqueue(async()=>{if(stop)return;
   try{const d=await api('variants',{issue:it.id}),k=base(it.img.original_url);
    it.vars=(d.results.associated_images||[]).filter(x=>x.original_url&&base(x.original_url)!==k)
-    .map(x=>({original_url:x.original_url,medium_url:x.medium_url||x.original_url}));it.done=true;refresh(id)}
+    .map(x=>({original_url:x.original_url,medium_url:x.medium_url||x.original_url}));
+   it.cov=(d.results.person_credits||[]).some(p=>p.id==S.artistId&&/cover/i.test(p.role||''));it.done=true;refresh(id)}
   catch(e){stop=e.message}})));
  s.busy=false;s.err=stop?stop+' Press “Load variants” again later to continue.':'';refresh(id)}
+const lb=$('#lb'),lbi=$('#lbi'),lbc=$('#lbc');
+document.addEventListener('click',e=>{const im=e.target.closest('.body figure img');
+ if(im){const f=im.closest('figure');lbi.src=im.dataset.full;
+  lbc.innerHTML=`<span>${esc(f.querySelector('figcaption span').textContent)}</span><span id="lbd">Loading size…</span><a class="btn" href="${esc(f.querySelector('a').href)}">Download</a>`;lb.hidden=false;return}
+ if(e.target.closest('#lb')&&!e.target.closest('#lbc'))lb.hidden=true});
+lbi.onload=()=>{const w=lbi.naturalWidth,h=lbi.naturalHeight,d=$('#lbd');
+ if(d)d.textContent=`${w} × ${h} px · up to ${Math.round(w/150*2.54)} × ${Math.round(h/150*2.54)} cm at 150 dpi`};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')lb.hidden=true});
 </script></html>"""
 
 if __name__ == "__main__":

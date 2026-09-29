@@ -1,4 +1,4 @@
-# Comic Cover Browser
+# 🦇 Comic Cover Browser
 
 A local web app to **browse every cover of a character, series or artist on a single page**, including **variant covers**, and download them at the highest resolution available. Built for finding covers to turn into posters.
 
@@ -13,6 +13,8 @@ It uses the [Comic Vine API](https://comicvine.gamespot.com/api/) and runs on yo
 - **Variant covers:** one button per series loads the alternate covers next to each issue, marked with a tag.
 - **Merged series:** series with the same name and start year (for example the US edition and other editions) are combined into a single section.
 - **Filter and sort:** filter by title or publisher, and sort by newest, most issues or A-Z.
+- **Full-size viewer:** click any cover to see it large, with its pixel dimensions and the largest poster size it supports at 150 dpi.
+- **Artist covers only:** in Artist mode, a button per series keeps only the issues where Comic Vine credits the artist with a cover.
 - **High-quality downloads:** the **Download** button saves the original image from Comic Vine, not the thumbnail shown on screen.
 
 ## Getting started
@@ -48,7 +50,7 @@ Your browser opens at `http://127.0.0.1:8765`. Press `Ctrl+C` in the terminal to
 
 - **Rate limit.** Comic Vine limits requests per hour (around 200 per resource). Loading variants makes one request per issue, and opening many series at once uses a lot. If you hit the limit, the page tells you and you can press the button again later; it resumes where it left off.
 - **A character's series list is incomplete.** Comic Vine's per-character list of series is sparsely filled in. So character search combines that list with every series whose title contains the name (up to 1000). Series where the character appears but isn't in the title (for example *Detective Comics* for Batman) only show up if Comic Vine has them linked.
-- **Artists:** you get the series where the artist has credits, and opening one shows all of its covers, not only theirs.
+- **Artists:** you get the series where the artist has credits. Use **Only artist's covers** to keep just the issues where they are credited with a cover. This checks every issue's credits (one request each), so it counts against the rate limit, and it only works where Comic Vine has cover credits filled in.
 - **Popularity:** Comic Vine has no sales or popularity data. "Most issues" is the closest option.
 - **Quality:** downloads are the largest image Comic Vine has, and its size depends on what each user uploaded. Large posters may need an AI upscaler.
 - **Data:** Comic Vine is crowd-sourced, so recent releases may be missing or late.
