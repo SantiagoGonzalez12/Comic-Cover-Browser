@@ -54,7 +54,7 @@ Your browser opens at `http://127.0.0.1:8765`. Press `Ctrl+C` in the terminal to
 ## 🛠️ Troubleshooting
 
 | Problem | Fix |
-|---|---|
+| --- | --- |
 | Invalid API key error | Delete `comicvine_key.txt` and run the script again to paste your key. |
 | "Rate limit reached" | Wait a while. Anything already loaded stays available while the program is running. |
 | Port 8765 is already in use | Change the `PORT` value at the top of `comic_covers.py`. |

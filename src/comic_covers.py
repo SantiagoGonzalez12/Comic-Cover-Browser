@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explorador de portadas de cómics (Comic Vine). Solo usa la librería estándar de Python."""
+"""Comic Cover Browser (Comic Vine). Uses only the Python standard library."""
 import json, os, re, urllib.parse, urllib.request, urllib.error, webbrowser
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -14,7 +14,7 @@ def get_key():
     if not k and os.path.exists(KEYFILE):
         k = open(KEYFILE).read().strip()
     if not k:
-        k = input("Pega tu clave de Comic Vine (comicvine.gamespot.com/api): ").strip()
+        k = input("Paste your Comic Vine API key (comicvine.gamespot.com/api): ").strip()
         open(KEYFILE, "w").write(k)
     return k
 
@@ -29,10 +29,10 @@ def cv(path, **params):
         with urllib.request.urlopen(req, timeout=30) as r:
             data = json.load(r)
     except urllib.error.HTTPError as e:
-        msg = "Límite de peticiones alcanzado, espera un rato." if e.code == 420 else f"Error HTTP {e.code}"
+        msg = "Rate limit reached, please wait a while." if e.code == 420 else f"HTTP error {e.code}"
         return {"status_code": e.code, "error": msg}
     except Exception as e:
-        return {"status_code": 0, "error": f"No se pudo conectar: {e}"}
+        return {"status_code": 0, "error": f"Could not connect: {e}"}
     if data.get("status_code") == 1:
         CACHE[url] = data
     return data
@@ -107,13 +107,13 @@ class H(BaseHTTPRequestHandler):
                 self.send_error(502)
                 return
             ext = os.path.splitext(urllib.parse.urlparse(src).path)[1] or ".jpg"
-            name = re.sub(r"[^\w\-]+", "_", q.get("n", "portada")) + ext
+            name = re.sub(r"[^\w\-]+", "_", q.get("n", "cover")) + ext
             return self.send(data, ctype, {"Content-Disposition": f'attachment; filename="{name}"'})
         self.send_error(404)
 
 
-PAGE = r"""<!doctype html><html lang="es"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Portadas</title>
+PAGE = r"""<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Covers</title>
 <style>
 :root{--board:#d6dce0;--ink:#101828;--tape:#f2b705;--paper:#fafaf7;--mute:#5b6675}
 *{box-sizing:border-box}body{margin:0;background:var(--board);color:var(--ink);font:15px/1.4 system-ui,sans-serif}
@@ -133,7 +133,7 @@ figure{margin:0;background:var(--paper);padding:8px;border-radius:3px;box-shadow
 figure img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:#c3cad0}
 figcaption{display:flex;justify-content:space-between;align-items:center;padding-top:6px;font-size:13px}
 figcaption a{color:var(--ink);font-weight:600}
-.var::before{content:"variante";position:absolute;top:14px;left:0;background:var(--tape);font:700 12px system-ui;padding:2px 8px}
+.var::before{content:"variant";position:absolute;top:14px;left:0;background:var(--tape);font:700 12px system-ui;padding:2px 8px}
 .char{display:flex;gap:12px;cursor:pointer}.char img{width:60px;flex:none}
 .char b{display:block}.char span,.sec span,.info{color:var(--mute);font-size:13px}
 .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.tools h2{margin:0;font-size:22px}
@@ -146,10 +146,10 @@ summary img{width:38px;aspect-ratio:2/3;object-fit:cover;background:#c3cad0}summ
 .body{padding:4px 14px 16px;background:var(--board)}
 .bar{display:flex;gap:12px;align-items:center;margin:10px 0}
 </style>
-<header><h1>PORTADAS</h1>
-<div class="mode"><button type="button" data-m="char" class="on">Personaje</button><button type="button" data-m="comic">Cómic</button><button type="button" data-m="artist">Artista</button></div>
-<form id="f"><input id="q" placeholder="Personaje: Batman, Spider-Man, Catwoman…" autofocus><button>Buscar</button></form></header>
-<main id="m"><p class="msg">Elige si buscas por personaje o por cómic, escribe un nombre y pulsa Buscar.</p></main>
+<header><h1>COVERS</h1>
+<div class="mode"><button type="button" data-m="char" class="on">Character</button><button type="button" data-m="comic">Comic</button><button type="button" data-m="artist">Artist</button></div>
+<form id="f"><input id="q" placeholder="Character: Batman, Spider-Man, Catwoman…" autofocus><button>Search</button></form></header>
+<main id="m"><p class="msg">Choose whether to search by character, comic or artist, type a name and press Search.</p></main>
 <script>
 const $=s=>document.querySelector(s),m=$('#m');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -160,23 +160,23 @@ let active=0;const Q=[];
 function next(){while(active<3&&Q.length){active++;Q.shift()()}}
 const enqueue=fn=>new Promise(res=>{Q.push(()=>fn().finally(()=>{active--;next();res()}));next()});
 
-const PH={char:'Personaje: Batman, Spider-Man, Catwoman…',comic:'Cómic: Absolute Batman, Detective Comics…',artist:'Artista: Peach Momoko, John Romita Jr.…'};
+const PH={char:'Character: Batman, Spider-Man, Catwoman…',comic:'Comic: Absolute Batman, Detective Comics…',artist:'Artist: Peach Momoko, John Romita Jr.…'};
 let mode='char',S=null;
 document.querySelectorAll('.mode button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;
  document.querySelectorAll('.mode button').forEach(x=>x.classList.toggle('on',x===b));
  $('#q').placeholder=PH[mode]});
 $('#f').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;mode==='comic'?searchComics(q):searchChars(q,mode)};
 
-async function searchChars(q,kind='char'){m.innerHTML='<p class="msg">Buscando…</p>';
+async function searchChars(q,kind='char'){m.innerHTML='<p class="msg">Searching…</p>';
  try{const d=await api(kind==='char'?'characters':'people',{q});const r=d.results;
-  if(!r.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
-  m.innerHTML='<p class="info">Elige '+(kind==='char'?'el personaje':'el artista')+':</p><div class="grid chars">'+r.map((c,i)=>`<figure class="char" data-i="${i}">
+  if(!r.length){m.innerHTML='<p class="msg">No results for “'+esc(q)+'”.</p>';return}
+  m.innerHTML='<p class="info">Choose the '+(kind==='char'?'character':'artist')+':</p><div class="grid chars">'+r.map((c,i)=>`<figure class="char" data-i="${i}">
    <img loading="lazy" src="${esc(c.image?.small_url)}"><div><b>${esc(c.name)}</b>
-   <span>${kind==='char'?esc(c.real_name||'')+'<br>'+esc(c.publisher?.name||'')+' · '+(c.count_of_issue_appearances||0)+' apariciones':esc(c.hometown||'')+'<br>'+esc((c.deck||'').slice(0,90))}</span></div></figure>`).join('')+'</div>';
+   <span>${kind==='char'?esc(c.real_name||'')+'<br>'+esc(c.publisher?.name||'')+' · '+(c.count_of_issue_appearances||0)+' appearances':esc(c.hometown||'')+'<br>'+esc((c.deck||'').slice(0,90))}</span></div></figure>`).join('')+'</div>';
   m.querySelectorAll('.char').forEach(el=>el.onclick=()=>openChar(r[el.dataset.i],()=>searchChars(q,kind),kind));
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
-async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p class="msg">Buscando las series de '+esc(c.name)+'…</p>';
+async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p class="msg">Finding series for '+esc(c.name)+'…</p>';
  try{const d=await api(kind==='char'?'charvols':'personvols',{id:c.id}).catch(e=>({results:{},err:e}));
   const byName=[];
   if(kind==='char'){const key=c.name.toLowerCase();
@@ -184,17 +184,17 @@ async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p
     byName.push(...r.results.filter(v=>v.name.toLowerCase().includes(key)));if(r.results.length<100)break}catch(e){break}}}
   const have=new Set(byName.map(v=>v.id));
   const ids=(d.results.volume_credits||[]).map(v=>v.id).filter(i=>!have.has(i));
-  if(!ids.length&&!byName.length){m.innerHTML='<p class="msg '+(d.err?'err':'')+'">'+esc(d.err?d.err.message:'No hay series registradas para esta búsqueda.')+'</p>';return}
+  if(!ids.length&&!byName.length){m.innerHTML='<p class="msg '+(d.err?'err':'')+'">'+esc(d.err?d.err.message:'No series found for this search.')+'</p>';return}
   const vols=[...byName];let done=0;
   const chunks=[];for(let i=0;i<ids.length;i+=100)chunks.push(ids.slice(i,i+100));
   await Promise.all(chunks.map(ch=>enqueue(async()=>{const r=await api('volumes',{ids:ch.join(',')});vols.push(...r.results);done+=ch.length;
-   m.innerHTML=`<p class="msg">Cargando series… ${done} de ${ids.length}</p>`})));
+   m.innerHTML=`<p class="msg">Loading series… ${done} of ${ids.length}</p>`})));
   showVolumes(c.name,vols,back);
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
-async function searchComics(q){m.innerHTML='<p class="msg">Buscando…</p>';
- try{const d=await api('search',{q});if(!d.results.length){m.innerHTML='<p class="msg">Sin resultados para «'+esc(q)+'».</p>';return}
-  showVolumes('«'+q+'»',d.results,null)}catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
+async function searchComics(q){m.innerHTML='<p class="msg">Searching…</p>';
+ try{const d=await api('search',{q});if(!d.results.length){m.innerHTML='<p class="msg">No results for “'+esc(q)+'”.</p>';return}
+  showVolumes('“'+q+'”',d.results,null)}catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
 function groupVols(list){const g=new Map();
  list.filter(v=>v.count_of_issues>0).forEach(v=>{const k=v.name.trim().toLowerCase()+'|'+(v.start_year||''),pn=v.publisher?.name||'',x=g.get(k);
@@ -205,9 +205,9 @@ function groupVols(list){const g=new Map();
 const st=id=>S.st[id]??=({open:false,items:null,loading:false,err:'',busy:false});
 function showVolumes(title,vols,back){
  S={title,vols:groupVols(vols),st:{},back,filter:'',sort:'new'};
- m.innerHTML=`<div class="tools">${back?'<button id="back">← Volver</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
-  <input id="flt" placeholder="Filtrar por título o editorial"><select id="srt"><option value="new">Más recientes</option><option value="num">Más números</option><option value="az">A-Z</option></select>
-  <button id="all">Abrir todas</button></div><div id="list"></div>`;
+ m.innerHTML=`<div class="tools">${back?'<button id="back">← Back</button>':''}<h2>${esc(title)}</h2><span class="info" id="cnt"></span><span class="sp"></span>
+  <input id="flt" placeholder="Filter by title or publisher"><select id="srt"><option value="new">Newest</option><option value="num">Most issues</option><option value="az">A-Z</option></select>
+  <button id="all">Open all</button></div><div id="list"></div>`;
  if(back)$('#back').onclick=back;
  $('#flt').oninput=e=>{S.filter=e.target.value.toLowerCase();renderList()};
  $('#srt').onchange=e=>{S.sort=e.target.value;renderList()};
@@ -218,11 +218,11 @@ const vis=()=>{const f=S.filter,a=S.vols.filter(v=>!f||(v.name+' '+(v.publisher?
 function renderList(){const v=vis();$('#cnt').textContent=v.length+' series';
  $('#list').innerHTML=v.map(x=>`<details class="sec" data-id="${x.id}" ${st(x.id).open?'open':''}><summary>
   <img loading="lazy" src="${esc(x.image?.icon_url||x.image?.small_url)}"><div><b>${esc(x.name)}</b>
-  <span>${esc(x.start_year||'?')} · ${esc(x.publisher?.name||'Sin editorial')} · ${x.count_of_issues} números</span></div></summary>
-  <div class="body">${st(x.id).open?body(x):''}</div></details>`).join('')||'<p class="msg">Nada coincide con el filtro.</p>'}
+  <span>${esc(x.start_year||'?')} · ${esc(x.publisher?.name||'No publisher')} · ${x.count_of_issues} issues</span></div></summary>
+  <div class="body">${st(x.id).open?body(x):''}</div></details>`).join('')||'<p class="msg">Nothing matches the filter.</p>'}
 function toggleAll(){const v=vis(),opening=v.some(x=>!st(x.id).open);
- if(opening&&v.length>30&&!confirm(`Son ${v.length} series y cada una usa al menos una petición. Comic Vine permite unas 200 por hora. ¿Abrir todas igualmente?`))return;
- v.forEach(x=>st(x.id).open=opening);$('#all').textContent=opening?'Cerrar todas':'Abrir todas';renderList()}
+ if(opening&&v.length>30&&!confirm(`That's ${v.length} series, and each uses at least one request. Comic Vine allows about 200 per hour. Open them all anyway?`))return;
+ v.forEach(x=>st(x.id).open=opening);$('#all').textContent=opening?'Close all':'Open all';renderList()}
 document.addEventListener('toggle',e=>{const el=e.target;if(!el.matches?.('details.sec'))return;
  const id=el.dataset.id,s=st(id);s.open=el.open;if(el.open){if(!s.items&&!s.loading)loadIssues(id);else refresh(id)}},true);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;
@@ -232,12 +232,12 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
 const vol=id=>S.vols.find(v=>v.id==id);
 function fig(v,it,img,isVar,n){const name=`${v.name}_${v.start_year||''}_${it.num}${isVar?'_var'+n:''}`;
  return `<figure class="${isVar?'var':''}"><img loading="lazy" src="${esc(img.medium_url||img.original_url)}">
- <figcaption><span>#${esc(it.num)}${it.pub?' · '+esc(it.pub):''}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Descargar</a></figcaption></figure>`}
+ <figcaption><span>#${esc(it.num)}${it.pub?' · '+esc(it.pub):''}</span><a href="/api/img?u=${encodeURIComponent(img.original_url)}&n=${encodeURIComponent(name)}">Download</a></figcaption></figure>`}
 function body(v){const s=st(v.id);
- if(!s.items)return s.err?`<p class="msg err">${esc(s.err)} <button data-act="retry" data-id="${v.id}">Reintentar</button></p>`:'<p class="msg">Cargando portadas…</p>';
+ if(!s.items)return s.err?`<p class="msg err">${esc(s.err)} <button data-act="retry" data-id="${v.id}">Retry</button></p>`:'<p class="msg">Loading covers…</p>';
  const nv=s.items.reduce((a,i)=>a+i.vars.length,0);
- return `<div class="bar"><span class="info">${s.items.length} portadas${nv?' + '+nv+' variantes':''}</span>
-  <button data-act="vars" data-id="${v.id}" ${s.busy?'disabled':''}>${s.busy?'Buscando variantes…':'Cargar variantes'}</button></div>
+ return `<div class="bar"><span class="info">${s.items.length} covers${nv?' + '+nv+' variants':''}</span>
+  <button data-act="vars" data-id="${v.id}" ${s.busy?'disabled':''}>${s.busy?'Finding variants…':'Load variants'}</button></div>
   ${s.err?`<p class="msg err">${esc(s.err)}</p>`:''}
   <div class="grid">${s.items.map(it=>fig(v,it,it.img,false)+it.vars.map((x,k)=>fig(v,it,x,true,k+1)).join('')).join('')}</div>`}
 const pend={};
@@ -256,13 +256,13 @@ async function loadVariants(id){const s=st(id);s.busy=true;s.err='';refresh(id);
    it.vars=(d.results.associated_images||[]).filter(x=>x.original_url&&base(x.original_url)!==k)
     .map(x=>({original_url:x.original_url,medium_url:x.medium_url||x.original_url}));it.done=true;refresh(id)}
   catch(e){stop=e.message}})));
- s.busy=false;s.err=stop?stop+' Vuelve a pulsar «Cargar variantes» más tarde para continuar.':'';refresh(id)}
+ s.busy=false;s.err=stop?stop+' Press “Load variants” again later to continue.':'';refresh(id)}
 </script></html>"""
 
 if __name__ == "__main__":
     KEY = get_key()
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
-    print(f"Abierto en http://127.0.0.1:{PORT}  (Ctrl+C para cerrar)")
+    print(f"Running at http://127.0.0.1:{PORT}  (Ctrl+C to quit)")
     webbrowser.open(f"http://127.0.0.1:{PORT}")
     try:
         srv.serve_forever()
