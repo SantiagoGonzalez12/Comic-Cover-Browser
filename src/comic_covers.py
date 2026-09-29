@@ -79,6 +79,10 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/personvols":
             return self.send(cv("person/4040-" + re.sub(r"\D", "", q.get("id", "")) + "/",
                                 field_list="id,volume_credits"))
+        if u.path == "/api/volsearch":
+            return self.send(cv("search/", resources="volume", query=q.get("q", ""), limit=100,
+                                page=int(q.get("page", 1)),
+                                field_list="id,name,start_year,count_of_issues,publisher,image"))
         if u.path == "/api/search":
             return self.send(cv("search/", resources="volume", query=q.get("q", ""), limit=40,
                                 field_list="id,name,start_year,count_of_issues,publisher,image"))
@@ -173,9 +177,15 @@ async function searchChars(q,kind='char'){m.innerHTML='<p class="msg">Buscando�
  }catch(e){m.innerHTML='<p class="msg err">'+esc(e.message)+'</p>'}}
 
 async function openChar(c,back,kind='char'){window.scrollTo(0,0);m.innerHTML='<p class="msg">Buscando las series de '+esc(c.name)+'…</p>';
- try{const d=await api(kind==='char'?'charvols':'personvols',{id:c.id});const ids=(d.results.volume_credits||[]).map(v=>v.id);
-  if(!ids.length){m.innerHTML='<p class="msg">No hay series registradas para esta búsqueda.</p>';return}
-  const vols=[];let done=0;
+ try{const d=await api(kind==='char'?'charvols':'personvols',{id:c.id}).catch(e=>({results:{},err:e}));
+  const byName=[];
+  if(kind==='char'){const key=c.name.toLowerCase();
+   for(let p=1;p<=5;p++){try{const r=await api('volsearch',{q:c.name,page:p});
+    byName.push(...r.results.filter(v=>v.name.toLowerCase().includes(key)));if(r.results.length<100)break}catch(e){break}}}
+  const have=new Set(byName.map(v=>v.id));
+  const ids=(d.results.volume_credits||[]).map(v=>v.id).filter(i=>!have.has(i));
+  if(!ids.length&&!byName.length){m.innerHTML='<p class="msg '+(d.err?'err':'')+'">'+esc(d.err?d.err.message:'No hay series registradas para esta búsqueda.')+'</p>';return}
+  const vols=[...byName];let done=0;
   const chunks=[];for(let i=0;i<ids.length;i+=100)chunks.push(ids.slice(i,i+100));
   await Promise.all(chunks.map(ch=>enqueue(async()=>{const r=await api('volumes',{ids:ch.join(',')});vols.push(...r.results);done+=ch.length;
    m.innerHTML=`<p class="msg">Cargando series… ${done} de ${ids.length}</p>`})));
